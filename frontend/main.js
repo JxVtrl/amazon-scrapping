@@ -21,59 +21,34 @@ function showError(message) {
 function createProductCard(product) {
     return `
         <div class="product-card">
-            <img src="${product.imageUrl}" alt="${product.title}" class="product-image">
+            <img class="product-image" src="${product.imageUrl}" alt="${product.title}" onerror="this.src='https://via.placeholder.com/300x300?text=No+Image'">
             <div class="product-info">
-                <a href="${product.productUrl}" target="_blank" class="product-title">
-                    ${product.title}
-                </a>
-                <div class="product-rating">${product.rating}</div>
-                <div class="product-reviews">${product.reviewCount} avaliações</div>
+                <h3 class="product-title">${product.title}</h3>
+                <div class="product-rating">
+                    <span>${product.rating}</span>
+                    <span>(${product.reviewCount} reviews)</span>
+                </div>
+                <a href="${product.productUrl}" class="product-link" target="_blank">View on Amazon</a>
             </div>
         </div>
     `;
 }
 
 // Função para buscar produtos
-async function searchProducts() {
-    const keyword = searchInput.value.trim();
-    
-    if (!keyword) {
-        showError('Por favor, digite um termo para busca');
-        return;
-    }
-
-    // Limpa resultados anteriores
-    errorElement.classList.add('hidden');
-    resultsElement.innerHTML = '';
-    toggleLoading(true);
-
+async function searchProducts(keyword) {
     try {
-        console.log('Fazendo requisição para buscar produtos...');
-        const response = await fetch(`http://localhost:3000/scrape?keyword=${encodeURIComponent(keyword)}`, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json'
-            }
-        });
-
-        const data = await response.json();
-
+        showError('');
+        toggleLoading(true);
+        const response = await fetch(`http://localhost:3000/scrape?keyword=${encodeURIComponent(keyword)}`);
+        
         if (!response.ok) {
-            throw new Error(data.error || 'Erro ao buscar produtos');
+            const data = await response.json();
+            throw new Error(data.error || 'Failed to fetch products');
         }
 
-        console.log('Produtos encontrados:', data.length);
-
-        if (data.length === 0) {
-            showError('Nenhum produto encontrado');
-            return;
-        }
-
-        // Exibe os resultados
-        resultsElement.innerHTML = data.map(createProductCard).join('');
-        errorElement.classList.add('hidden');
+        const products = await response.json();
+        resultsElement.innerHTML = products.map(createProductCard).join('');
     } catch (error) {
-        console.error('Erro na busca:', error);
         showError(error.message);
     } finally {
         toggleLoading(false);
@@ -81,9 +56,92 @@ async function searchProducts() {
 }
 
 // Event Listeners
-searchButton.addEventListener('click', searchProducts);
+searchButton.addEventListener('click', () => {
+    const keyword = searchInput.value.trim();
+    if (keyword) {
+        searchProducts(keyword);
+    }
+});
+
 searchInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
-        searchProducts();
+        const keyword = searchInput.value.trim();
+        if (keyword) {
+            searchProducts(keyword);
+        }
     }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('searchInput');
+    const searchButton = document.getElementById('searchButton');
+    const resultsDiv = document.getElementById('results');
+    const loadingDiv = document.getElementById('loading');
+    const errorDiv = document.getElementById('error');
+
+    const showLoading = () => {
+        loadingDiv.classList.remove('hidden');
+        errorDiv.classList.add('hidden');
+        resultsDiv.innerHTML = '';
+    };
+
+    const hideLoading = () => {
+        loadingDiv.classList.add('hidden');
+    };
+
+    const showError = (message) => {
+        errorDiv.textContent = message;
+        errorDiv.classList.remove('hidden');
+    };
+
+    const createProductCard = (product) => {
+        return `
+            <div class="product-card">
+                <img class="product-image" src="${product.imageUrl}" alt="${product.title}" onerror="this.src='https://via.placeholder.com/300x300?text=No+Image'">
+                <div class="product-info">
+                    <h3 class="product-title">${product.title}</h3>
+                    <div class="product-rating">
+                        <span>${product.rating}</span>
+                        <span>(${product.reviewCount} reviews)</span>
+                    </div>
+                    <a href="${product.productUrl}" class="product-link" target="_blank">View on Amazon</a>
+                </div>
+            </div>
+        `;
+    };
+
+    const searchProducts = async (keyword) => {
+        try {
+            showLoading();
+            const response = await fetch(`http://localhost:3000/scrape?keyword=${encodeURIComponent(keyword)}`);
+            
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Failed to fetch products');
+            }
+
+            const products = await response.json();
+            resultsDiv.innerHTML = products.map(createProductCard).join('');
+        } catch (error) {
+            showError(error.message);
+        } finally {
+            hideLoading();
+        }
+    };
+
+    searchButton.addEventListener('click', () => {
+        const keyword = searchInput.value.trim();
+        if (keyword) {
+            searchProducts(keyword);
+        }
+    });
+
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            const keyword = searchInput.value.trim();
+            if (keyword) {
+                searchProducts(keyword);
+            }
+        }
+    });
 }); 
