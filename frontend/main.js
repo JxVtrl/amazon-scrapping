@@ -146,19 +146,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const showLoading = () => {
         loadingDiv.classList.remove('hidden');
         errorDiv.classList.add('hidden');
-        resultsDiv.innerHTML = ''; // Limpa os resultados anteriores
-        resultsDiv.classList.add('hidden'); // Esconde o grid
+        resultsDiv.innerHTML = '';
+        resultsDiv.classList.add('hidden');
     };
 
     const hideLoading = () => {
         loadingDiv.classList.add('hidden');
-        resultsDiv.classList.remove('hidden'); // Mostra o grid novamente
     };
 
     const showError = (message) => {
         errorDiv.textContent = message;
         errorDiv.classList.remove('hidden');
-        resultsDiv.classList.add('hidden'); // Esconde o grid em caso de erro
+        resultsDiv.classList.add('hidden');
     };
 
     const createProductCard = (product) => {
@@ -182,17 +181,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let paginationHtml = '<div class="pagination">';
         
-        // Botão Previous
         if (currentPage > 1) {
             paginationHtml += `<button class="page-btn" data-page="${currentPage - 1}">Previous</button>`;
         }
 
-        // Páginas numeradas
         for (let i = 1; i <= totalPages; i++) {
             if (
-                i === 1 || // Primeira página
-                i === totalPages || // Última página
-                (i >= currentPage - 2 && i <= currentPage + 2) // 2 páginas antes e depois da atual
+                i === 1 ||
+                i === totalPages ||
+                (i >= currentPage - 2 && i <= currentPage + 2)
             ) {
                 paginationHtml += `
                     <button class="page-btn ${i === currentPage ? 'active' : ''}" 
@@ -208,7 +205,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Botão Next
         if (currentPage < totalPages) {
             paginationHtml += `<button class="page-btn" data-page="${currentPage + 1}">Next</button>`;
         }
@@ -220,7 +216,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchProducts = async (keyword, page = 1) => {
         try {
             showLoading();
-            const response = await fetch(`http://localhost:3000/scrape?keyword=${encodeURIComponent(keyword)}&page=${page}`);
+            const encodedKeyword = encodeURIComponent(keyword.trim()).replace(/%20/g, '+');
+            const response = await fetch(`http://localhost:3000/scrape?keyword=${encodedKeyword}&page=${page}`);
             
             if (!response.ok) {
                 const data = await response.json();
@@ -228,8 +225,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const data = await response.json();
+            
             const productsHtml = data.products.map(createProductCard).join('');
             const paginationHtml = createPagination(data.page, data.totalPages);
+            
+            resultsDiv.classList.remove('hidden');
             
             resultsDiv.innerHTML = `
                 <div class="results-info">
@@ -241,7 +241,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${paginationHtml}
             `;
 
-            // Adicionar event listeners para os botões de paginação
             document.querySelectorAll('.page-btn').forEach(button => {
                 button.addEventListener('click', () => {
                     const newPage = parseInt(button.dataset.page);
@@ -257,23 +256,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    searchButton.addEventListener('click', () => {
+    const handleSearch = () => {
         const keyword = searchInput.value.trim();
         if (keyword) {
             currentKeyword = keyword;
             currentPage = 1;
             searchProducts(keyword, 1);
         }
-    });
+    };
+
+    searchButton.addEventListener('click', handleSearch);
 
     searchInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
-            const keyword = searchInput.value.trim();
-            if (keyword) {
-                currentKeyword = keyword;
-                currentPage = 1;
-                searchProducts(keyword, 1);
-            }
+            handleSearch();
         }
     });
 }); 
