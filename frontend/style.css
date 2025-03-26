@@ -303,28 +303,33 @@ footer {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 0.5rem;
-    margin: 4rem 0;
-    padding: 0 1rem;
+    gap: 1rem;
+    margin: 2rem 0;
+    padding: 1rem;
+}
+
+.page-info {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
 }
 
 .page-btn {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    font-size: 17px;
-    padding: 8px 16px;
-    margin: 0 4px;
-}
-
-.page-btn.active {
+    padding: 0.75rem 1.5rem;
     background-color: var(--primary-color);
     color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: all 0.3s ease;
 }
 
-.page-btn:hover:not(.active) {
-    background-color: var(--section-background);
-    color: var(--text-primary);
+.page-btn:hover {
+    background-color: var(--primary-dark);
+}
+
+.page-btn:disabled {
+    background-color: var(--text-tertiary);
+    cursor: not-allowed;
 }
 
 .results-info {
