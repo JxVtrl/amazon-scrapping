@@ -23,32 +23,54 @@ app.use((req, res, next) => {
   next();
 });
 
+// Função para esperar um tempo específico
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 // Função para extrair dados do produto
 function extractProductData(element) {
   try {
-    // Seletores para encontrar os elementos
-    const titleElement = element.querySelector('h2 a span');
+    // Seletores atualizados para a nova estrutura da Amazon
+    const titleElement = element.querySelector('.a-size-base-plus.a-color-base.a-text-normal');
     const ratingElement = element.querySelector('.a-icon-star-small');
     const reviewCountElement = element.querySelector('.s-link-style .s-underline-text');
     const imageElement = element.querySelector('.s-image');
     const linkElement = element.querySelector('h2 a');
 
-    if (!titleElement || !imageElement || !linkElement) {
-      console.log('Elementos não encontrados no produto:', {
-        title: !!titleElement,
-        image: !!imageElement,
-        link: !!linkElement
-      });
+    // Se não tiver título, não podemos prosseguir
+    if (!titleElement) {
+      console.log('Título não encontrado no produto');
       return null;
     }
 
-    return {
+    // Extrair dados disponíveis
+    const productData = {
       title: titleElement.textContent?.trim() || '',
       rating: ratingElement?.textContent?.trim() || 'Sem avaliação',
       reviewCount: reviewCountElement?.textContent?.trim() || '0',
-      imageUrl: imageElement.getAttribute('src') || '',
-      productUrl: `https://www.amazon.com${linkElement.getAttribute('href')}`,
+      imageUrl: imageElement?.getAttribute('src') || '',
     };
+
+    // Tentar encontrar o link de várias maneiras
+    if (linkElement) {
+      productData.productUrl = `https://www.amazon.com${linkElement.getAttribute('href')}`;
+    } else {
+      // Tentar encontrar o link em outros elementos
+      const alternativeLink = element.querySelector('a[href*="/dp/"]');
+      if (alternativeLink) {
+        productData.productUrl = `https://www.amazon.com${alternativeLink.getAttribute('href')}`;
+      } else {
+        // Se não encontrar o link, usar o título como identificador
+        productData.productUrl = `https://www.amazon.com/s?k=${encodeURIComponent(productData.title)}`;
+      }
+    }
+
+    console.log('Dados extraídos com sucesso:', {
+      title: productData.title,
+      hasImage: !!productData.imageUrl,
+      hasLink: !!productData.productUrl
+    });
+
+    return productData;
   } catch (error) {
     console.error('Erro ao extrair dados do produto:', error);
     return null;
@@ -88,6 +110,16 @@ async function scrapeWithPuppeteer(keyword) {
     console.log('Aguardando carregamento dos produtos...');
     await page.waitForSelector('.s-result-item[data-component-type="s-search-result"]', {
       timeout: 10000
+    });
+
+    // Aguardar um pouco mais para garantir que todo o conteúdo dinâmico foi carregado
+    console.log('Aguardando carregamento do conteúdo dinâmico...');
+    await wait(2000);
+
+    // Scroll para carregar mais conteúdo
+    await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight);
+      return new Promise(resolve => setTimeout(resolve, 1000));
     });
 
     console.log('Obtendo conteúdo da página...');
