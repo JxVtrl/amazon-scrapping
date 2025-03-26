@@ -146,15 +146,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const showLoading = () => {
         loadingDiv.classList.remove('hidden');
         errorDiv.classList.add('hidden');
+        resultsDiv.innerHTML = ''; // Limpa os resultados anteriores
+        resultsDiv.classList.add('hidden'); // Esconde o grid
     };
 
     const hideLoading = () => {
         loadingDiv.classList.add('hidden');
+        resultsDiv.classList.remove('hidden'); // Mostra o grid novamente
     };
 
     const showError = (message) => {
         errorDiv.textContent = message;
         errorDiv.classList.remove('hidden');
+        resultsDiv.classList.add('hidden'); // Esconde o grid em caso de erro
     };
 
     const createProductCard = (product) => {
