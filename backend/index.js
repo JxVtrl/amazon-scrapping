@@ -1,7 +1,7 @@
 import express from 'express';
-import axios from 'axios';
 import { JSDOM } from 'jsdom';
 import cors from 'cors';
+import puppeteer from 'puppeteer';
 
 const app = express();
 const port = 3000;
@@ -23,24 +23,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Headers para simular um navegador real
-const headers = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-  'Connection': 'keep-alive',
-  'Cache-Control': 'no-cache',
-  'Pragma': 'no-cache',
-  'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-  'Sec-Ch-Ua-Mobile': '?0',
-  'Sec-Ch-Ua-Platform': '"Windows"',
-  'Sec-Fetch-Dest': 'document',
-  'Sec-Fetch-Mode': 'navigate',
-  'Sec-Fetch-Site': 'none',
-  'Sec-Fetch-User': '?1',
-  'Upgrade-Insecure-Requests': '1'
-};
-
 // Função para extrair dados do produto
 function extractProductData(element) {
   try {
@@ -52,6 +34,11 @@ function extractProductData(element) {
     const linkElement = element.querySelector('h2 a');
 
     if (!titleElement || !imageElement || !linkElement) {
+      console.log('Elementos não encontrados no produto:', {
+        title: !!titleElement,
+        image: !!imageElement,
+        link: !!linkElement
+      });
       return null;
     }
 
@@ -68,6 +55,51 @@ function extractProductData(element) {
   }
 }
 
+// Função para fazer scraping com Puppeteer
+async function scrapeWithPuppeteer(keyword) {
+  console.log('Iniciando navegador Puppeteer...');
+  const browser = await puppeteer.launch({ 
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  
+  try {
+    console.log('Criando nova página...');
+    const page = await browser.newPage();
+    
+    // Configurar user agent
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    
+    // Configurar viewport
+    await page.setViewport({ width: 1920, height: 1080 });
+    
+    // Configurar idioma
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
+    });
+
+    console.log('Navegando para a Amazon...');
+    const url = `https://www.amazon.com/s?k=${encodeURIComponent(keyword)}`;
+    await page.goto(url, {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    });
+
+    console.log('Aguardando carregamento dos produtos...');
+    await page.waitForSelector('.s-result-item[data-component-type="s-search-result"]', {
+      timeout: 10000
+    });
+
+    console.log('Obtendo conteúdo da página...');
+    const content = await page.content();
+    
+    return content;
+  } finally {
+    console.log('Fechando navegador...');
+    await browser.close();
+  }
+}
+
 // Endpoint principal de scraping
 app.get('/scrape', async (req, res) => {
   try {
@@ -78,32 +110,15 @@ app.get('/scrape', async (req, res) => {
       return res.status(400).json({ error: 'Palavra-chave inválida' });
     }
 
-    // Faz a requisição para a Amazon
-    console.log('Fazendo requisição para Amazon...');
-    const response = await axios.get(`https://www.amazon.com/s?k=${encodeURIComponent(keyword)}`, {
-      headers,
-      timeout: 15000,
-      validateStatus: function (status) {
-        return status >= 200 && status < 500; // Aceita qualquer status menor que 500
-      }
-    });
-
-    // Verifica se a resposta contém HTML válido
-    if (!response.data || typeof response.data !== 'string') {
-      throw new Error('Resposta inválida da Amazon');
-    }
-
+    // Faz o scraping usando Puppeteer
+    const html = await scrapeWithPuppeteer(keyword);
+    
     // Cria um DOM virtual com o HTML recebido
-    const dom = new JSDOM(response.data);
+    const dom = new JSDOM(html);
     const document = dom.window.document;
 
-    // Verifica se fomos bloqueados
-    const blockedText = document.querySelector('body').textContent;
-    if (blockedText.includes('Sorry, we just need to make sure you\'re not a robot') ||
-        blockedText.includes('To discuss automated access to Amazon data please contact') ||
-        blockedText.includes('Enter the characters you see below')) {
-      throw new Error('Acesso bloqueado pela Amazon. Tente novamente mais tarde.');
-    }
+    // Log do HTML recebido
+    console.log('HTML recebido:', html.substring(0, 500));
 
     // Encontra todos os produtos na página
     const productElements = document.querySelectorAll('.s-result-item[data-component-type="s-search-result"]');
@@ -127,24 +142,14 @@ app.get('/scrape', async (req, res) => {
     res.json(products);
   } catch (error) {
     console.error('Erro durante o scraping:', error);
-    
-    if (axios.isAxiosError(error)) {
-      console.error('Status do erro:', error.response?.status);
-      console.error('Dados do erro:', error.response?.data);
-      
-      if (error.response?.status === 503) {
-        return res.status(503).json({ error: 'Acesso bloqueado pela Amazon. Tente novamente mais tarde.' });
-      }
-    }
-    
-    res.status(500).json({ error: error.message || 'Erro ao buscar produtos. Tente novamente mais tarde.' });
+    res.status(500).json({ error: error.message });
   }
 });
 
 // Tratamento de erros global
 app.use((err, req, res, next) => {
   console.error('Erro não tratado:', err);
-  res.status(500).json({ error: 'Erro interno do servidor' });
+  res.status(500).json({ error: err.message });
 });
 
 // Inicia o servidor
