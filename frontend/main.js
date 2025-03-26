@@ -34,20 +34,81 @@ function createProductCard(product) {
     `;
 }
 
+// Função para criar paginação
+function createPagination(currentPage, totalPages) {
+    if (totalPages <= 1) return '';
+
+    let paginationHtml = '<div class="pagination">';
+    
+    // Botão Previous
+    if (currentPage > 1) {
+        paginationHtml += `<button class="page-btn" data-page="${currentPage - 1}">Previous</button>`;
+    }
+
+    // Páginas numeradas
+    for (let i = 1; i <= totalPages; i++) {
+        if (
+            i === 1 || // Primeira página
+            i === totalPages || // Última página
+            (i >= currentPage - 2 && i <= currentPage + 2) // 2 páginas antes e depois da atual
+        ) {
+            paginationHtml += `
+                <button class="page-btn ${i === currentPage ? 'active' : ''}" 
+                        data-page="${i}">
+                    ${i}
+                </button>
+            `;
+        } else if (
+            i === currentPage - 3 ||
+            i === currentPage + 3
+        ) {
+            paginationHtml += '<span class="page-dots">...</span>';
+        }
+    }
+
+    // Botão Next
+    if (currentPage < totalPages) {
+        paginationHtml += `<button class="page-btn" data-page="${currentPage + 1}">Next</button>`;
+    }
+
+    paginationHtml += '</div>';
+    return paginationHtml;
+}
+
 // Função para buscar produtos
-async function searchProducts(keyword) {
+async function searchProducts(keyword, page = 1) {
     try {
         showError('');
         toggleLoading(true);
-        const response = await fetch(`http://localhost:3000/scrape?keyword=${encodeURIComponent(keyword)}`);
+        const response = await fetch(`http://localhost:3000/scrape?keyword=${encodeURIComponent(keyword)}&page=${page}`);
         
         if (!response.ok) {
             const data = await response.json();
             throw new Error(data.error || 'Failed to fetch products');
         }
 
-        const products = await response.json();
-        resultsElement.innerHTML = products.map(createProductCard).join('');
+        const data = await response.json();
+        const productsHtml = data.products.map(createProductCard).join('');
+        const paginationHtml = createPagination(data.page, data.totalPages);
+        
+        resultsElement.innerHTML = `
+            <div class="results-info">
+                Showing page ${data.page} of ${data.totalPages} (${data.totalProducts} products)
+            </div>
+            <div class="results-grid">
+                ${productsHtml}
+            </div>
+            ${paginationHtml}
+        `;
+
+        // Adicionar event listeners para os botões de paginação
+        document.querySelectorAll('.page-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const newPage = parseInt(button.dataset.page);
+                searchProducts(keyword, newPage);
+            });
+        });
+
     } catch (error) {
         showError(error.message);
     } finally {
@@ -78,11 +139,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsDiv = document.getElementById('results');
     const loadingDiv = document.getElementById('loading');
     const errorDiv = document.getElementById('error');
+    
+    let currentKeyword = '';
+    let currentPage = 1;
 
     const showLoading = () => {
         loadingDiv.classList.remove('hidden');
         errorDiv.classList.add('hidden');
-        resultsDiv.innerHTML = '';
     };
 
     const hideLoading = () => {
@@ -110,18 +173,79 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     };
 
-    const searchProducts = async (keyword) => {
+    const createPagination = (currentPage, totalPages) => {
+        if (totalPages <= 1) return '';
+
+        let paginationHtml = '<div class="pagination">';
+        
+        // Botão Previous
+        if (currentPage > 1) {
+            paginationHtml += `<button class="page-btn" data-page="${currentPage - 1}">Previous</button>`;
+        }
+
+        // Páginas numeradas
+        for (let i = 1; i <= totalPages; i++) {
+            if (
+                i === 1 || // Primeira página
+                i === totalPages || // Última página
+                (i >= currentPage - 2 && i <= currentPage + 2) // 2 páginas antes e depois da atual
+            ) {
+                paginationHtml += `
+                    <button class="page-btn ${i === currentPage ? 'active' : ''}" 
+                            data-page="${i}">
+                        ${i}
+                    </button>
+                `;
+            } else if (
+                i === currentPage - 3 ||
+                i === currentPage + 3
+            ) {
+                paginationHtml += '<span class="page-dots">...</span>';
+            }
+        }
+
+        // Botão Next
+        if (currentPage < totalPages) {
+            paginationHtml += `<button class="page-btn" data-page="${currentPage + 1}">Next</button>`;
+        }
+
+        paginationHtml += '</div>';
+        return paginationHtml;
+    };
+
+    const searchProducts = async (keyword, page = 1) => {
         try {
             showLoading();
-            const response = await fetch(`http://localhost:3000/scrape?keyword=${encodeURIComponent(keyword)}`);
+            const response = await fetch(`http://localhost:3000/scrape?keyword=${encodeURIComponent(keyword)}&page=${page}`);
             
             if (!response.ok) {
                 const data = await response.json();
                 throw new Error(data.error || 'Failed to fetch products');
             }
 
-            const products = await response.json();
-            resultsDiv.innerHTML = products.map(createProductCard).join('');
+            const data = await response.json();
+            const productsHtml = data.products.map(createProductCard).join('');
+            const paginationHtml = createPagination(data.page, data.totalPages);
+            
+            resultsDiv.innerHTML = `
+                <div class="results-info">
+                    Showing page ${data.page} of ${data.totalPages} (${data.totalProducts} products)
+                </div>
+                <div class="results-grid">
+                    ${productsHtml}
+                </div>
+                ${paginationHtml}
+            `;
+
+            // Adicionar event listeners para os botões de paginação
+            document.querySelectorAll('.page-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const newPage = parseInt(button.dataset.page);
+                    searchProducts(currentKeyword, newPage);
+                    currentPage = newPage;
+                });
+            });
+
         } catch (error) {
             showError(error.message);
         } finally {
@@ -132,7 +256,9 @@ document.addEventListener('DOMContentLoaded', () => {
     searchButton.addEventListener('click', () => {
         const keyword = searchInput.value.trim();
         if (keyword) {
-            searchProducts(keyword);
+            currentKeyword = keyword;
+            currentPage = 1;
+            searchProducts(keyword, 1);
         }
     });
 
@@ -140,7 +266,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') {
             const keyword = searchInput.value.trim();
             if (keyword) {
-                searchProducts(keyword);
+                currentKeyword = keyword;
+                currentPage = 1;
+                searchProducts(keyword, 1);
             }
         }
     });

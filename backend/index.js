@@ -135,8 +135,9 @@ async function scrapeWithPuppeteer(keyword) {
 // Endpoint principal de scraping
 app.get('/scrape', async (req, res) => {
   try {
-    const { keyword } = req.query;
-    console.log('Recebida requisição para keyword:', keyword);
+    const { keyword, page = 1 } = req.query;
+    const itemsPerPage = 10;
+    console.log('Recebida requisição para keyword:', keyword, 'página:', page);
 
     if (!keyword || typeof keyword !== 'string') {
       return res.status(400).json({ error: 'Palavra-chave inválida' });
@@ -149,29 +150,48 @@ app.get('/scrape', async (req, res) => {
     const dom = new JSDOM(html);
     const document = dom.window.document;
 
-    // Log do HTML recebido
-    console.log('HTML recebido:', html.substring(0, 500));
-
     // Encontra todos os produtos na página
     const productElements = document.querySelectorAll('.s-result-item[data-component-type="s-search-result"]');
     console.log(`Encontrados ${productElements.length} produtos`);
     
-    // Extrai os dados dos 10 primeiros produtos
+    // Calcula os índices para a paginação
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    
+    // Extrai os dados dos produtos para a página atual
     const products = [];
+    let validProducts = 0;
+
     for (const element of productElements) {
       const productData = extractProductData(element);
       if (productData) {
-        products.push(productData);
-        if (products.length >= 10) break;
+        validProducts++;
+        if (validProducts > startIndex && validProducts <= endIndex) {
+          products.push(productData);
+        }
       }
     }
 
+    // Calcula o total de páginas
+    const totalProducts = validProducts;
+    const totalPages = Math.ceil(totalProducts / itemsPerPage);
+
     if (products.length === 0) {
-      return res.status(404).json({ error: 'Nenhum produto encontrado' });
+      return res.status(404).json({ 
+        error: 'Nenhum produto encontrado',
+        page,
+        totalPages: 0,
+        totalProducts: 0
+      });
     }
 
-    console.log(`Retornando ${products.length} produtos`);
-    res.json(products);
+    console.log(`Retornando ${products.length} produtos da página ${page}`);
+    res.json({
+      products,
+      page: Number(page),
+      totalPages,
+      totalProducts
+    });
   } catch (error) {
     console.error('Erro durante o scraping:', error);
     res.status(500).json({ error: error.message });
